@@ -47,7 +47,7 @@ void save(UserDatum);
 string hashPassword(string);
 void saveCredential(string, string);
 void loadCredentials();
-void createExpense(int, string, string, int, int, int);
+void createExpense(double, string, string, int, int, int);
 void saveExpense(string, Expense);
 void loadExpenses();
 void deleteExpense(int);

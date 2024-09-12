@@ -90,7 +90,7 @@ void loadCredentials() {
     Creds.close();
 }
 
-void createExpense(int amount, string description, string category, int month, int day, int year) {
+void createExpense(double amount, string description, string category, int month, int day, int year) {
     if (currentUser.username == noUser.username) return;
     Expense expense = Expense(amount, description, category, month, day, year, latestID - 1, true);
     latestID = latestID - 1;
