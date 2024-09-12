@@ -6,8 +6,18 @@ std::unordered_map<string, UserDatum> userData;
 UserDatum noUser = UserDatum();
 UserDatum currentUser = UserDatum();
 int latestID = 0;
-
+/*
+void main(int argc, char **argv) {
+    QApplication app(argc, argv);
+    auto myWindow = new QWidget();
+    auto myButton = new QPushButton(myWindow);
+    myWindow->show();
+    return app.exec();
+}
+GUI testing
+*/
 int main() {
+    
 }
 
 bool createAccount(string username, string password) {
@@ -109,7 +119,7 @@ void loadExpenses() {
     while (getline(Data, line)) {
         if (line.empty()) continue;
         std::istringstream iss(line);
-    string lineStream;
+        string lineStream;
         vector<string> data;
         while (getline(iss, lineStream, ',')) {
             data.push_back(lineStream);

@@ -5,7 +5,12 @@
 #include <fstream>
 #include <openssl/sha.h>
 #include <sstream>
-
+/*
+#include <QApplication>
+#include <QWidget>
+#include <QPushButton>
+Add these when developing GUI
+*/ 
 using std::vector;
 using std::string;
 
