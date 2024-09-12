@@ -37,7 +37,7 @@ struct Expense {
 struct UserDatum {
     string username;
     vector<Expense> expenses;
-    std::unordered_map<string, int> budgets;
+    std::unordered_map<string, double> budgets;
 };
 
 bool login(string, string);
