@@ -28,7 +28,7 @@ int main() {
     loadCredentials();
     loadExpenses();
     login("Gus", "1");
-    
+
     logout();
 
     sqlite3_close(db);
@@ -92,7 +92,10 @@ void loadExpenses() {
     auto callback = [](void* data, int argc, char** argv, char** azColName) -> int {
         std::unordered_map<string, UserDatum>* userData = static_cast<std::unordered_map<string, UserDatum>*>(data);
         if (argc == 9) {
-            Expense expense(std::stod(argv[1]), argv[2], argv[3], std::stoi(argv[4]), std::stoi(argv[5]), std::stoi(argv[6]), std::stoi(argv[7]), std::stoi(argv[8]));
+            Expense expense(std::stod(argv[1]), argv[2], argv[3], 
+                            std::stoi(argv[4]), std::stoi(argv[5]),
+                            std::stoi(argv[6]), std::stoi(argv[7]),
+                             std::stoi(argv[8]));
             (*userData)[argv[0]].expenses.push_back(expense);
         }
         return 0;
@@ -113,7 +116,8 @@ bool createAccount(string username, string password) {
 
     string hashedPassword = hashPassword(password);
 
-    std::string insertSQL = "INSERT INTO users (username, password) VALUES ('" + username + "', '" + hashedPassword + "');";
+    std::string insertSQL = "INSERT INTO users (username, password) VALUES ('"
+                            + username + "', '" + hashedPassword + "');";
     if (executeQuery(insertSQL.c_str(), nullptr, nullptr) != SQLITE_OK) {
         return false;
     }
@@ -127,9 +131,12 @@ bool createAccount(string username, string password) {
 }
 
 bool login(string username, string password) {
-    if (currentUser.username != noUser.username) { // someone is already logged in, bad
+    if (currentUser.username != noUser.username) { // someone is already logged in, prompt user to log out probably?
         std::cerr << "Bad login 0" << std::endl;
-        return false; 
+        if(false) {  // for now just deny the login, put a condition here or something
+            logout();
+        }
+        else return false; 
     }
     if (credentials.find(username) == credentials.end()) { // username is not in system
         std::cerr << "Bad login 1" << std::endl;
@@ -143,16 +150,16 @@ bool login(string username, string password) {
     return true;
 }
 
-void save(UserDatum client) {
-    for (auto& expense : client.expenses) {
+void save() {
+    for (auto& expense : currentUser.expenses) {
         if (expense.madeThisSession) {
-            saveExpense(client.username, expense);
+            saveExpense(currentUser.username, expense);
         }
     }
 }
 
 void logout() {
-    save(currentUser);
+    save();
     currentUser = noUser;
 }
 
@@ -178,7 +185,6 @@ void saveExpense(string username, Expense expense) {
         + std::to_string(expense.id) + ", "
         + std::to_string(expense.madeThisSession) + ");";
     executeQuery(insertSQL.c_str(), nullptr, nullptr);
-
 }
 
 void createExpense(double amount, string description, string category, int month, int day, int year) {
@@ -190,7 +196,9 @@ void createExpense(double amount, string description, string category, int month
 
 void deleteExpense(int expenseID) {
     std::string deleteSQL = "DELETE FROM expenses WHERE id = " + std::to_string(expenseID) + ";";
-    executeQuery(deleteSQL.c_str(), nullptr, nullptr);
+    if (executeQuery(deleteSQL.c_str(), nullptr, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to delete expense with ID " << expenseID << " from database." << std::endl;
+    }
 
     for (auto& userDatum : userData) {
         auto& userExpenses = userDatum.second.expenses;
@@ -198,6 +206,7 @@ void deleteExpense(int expenseID) {
             [expenseID](const Expense& expense) { return expense.id == expenseID; }),
             userExpenses.end());
     }
+    currentUser = userData[currentUser.username]; // update currentUser with changes
 }
 
 void setBudget(string category, double budget) {
@@ -210,23 +219,6 @@ double totalSpending(string category) {
         if (expense.category == category) sum += expense.amountSpent;
     }
     return sum;
-}
-
-vector<Expense> filterCategory(string category) {
-    vector<Expense> fin;
-    for (auto& expense : currentUser.expenses) {
-        if (expense.category == category) fin.push_back(expense);
-    }
-    return fin;
-}
-
-vector<Expense> sortByDate(vector<Expense> selection) {
-    std::sort(selection.begin(), selection.end(), [](const Expense& a, const Expense& b) {
-        if (a.year != b.year) return a.year < b.year;
-        if (a.month != b.month) return a.month < b.month;
-        return a.day < b.day;
-    });
-    return selection;
 }
 
 bool deleteAccount(string username) {

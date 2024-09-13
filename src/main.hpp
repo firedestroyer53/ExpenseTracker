@@ -43,21 +43,22 @@ struct UserDatum {
     std::unordered_map<string, double> budgets;
 };
 
+// account functions
 bool login(string, string);
 bool createAccount(string, string);
 void logout();
+bool deleteAccount(string);
+// file functions
 void save(UserDatum);
 string hashPassword(string);
 void saveExpense(string, Expense);
 void loadCredentials();
 void loadExpenses();
+// expense functions
 void createExpense(double, string, string, int, int, int);
 void deleteExpense(int);
 void setBudget(string, double);
 double totalSpending(string);
-vector<Expense> filterCategory(string);
-vector<Expense> sortByDate(vector<Expense>);
-bool deleteAccount(string);
 
 // SQLite Database Functions
 void initializeDatabase();
