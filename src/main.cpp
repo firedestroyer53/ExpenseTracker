@@ -1,5 +1,7 @@
 #include "main.hpp"
 
+sqlite3* db;
+
 std::unordered_map<string, string> credentials;
 std::unordered_map<string, UserDatum> userData;
 
@@ -17,34 +19,123 @@ void main(int argc, char **argv) {
 GUI testing
 */
 int main() {
+    if (sqlite3_open("files/expenses.db", &db)) {
+        std::cerr << "Can't open database: " << sqlite3_errmsg(db) << std::endl;
+        return 1;
+    }
+
+    initializeDatabase();
+    loadCredentials();
+    loadExpenses();
+    login("Gus", "1");
     
+    logout();
+
+    sqlite3_close(db);
+    return 0;
+}
+
+int executeQuery(const char* sql, int (*callback)(void*, int, char**, char**), void* data) {
+    char* errmsg;
+    int rc = sqlite3_exec(db, sql, callback, data, &errmsg);
+    if (rc != SQLITE_OK) {
+        std::cerr << "SQL error: " << errmsg << std::endl;
+        sqlite3_free(errmsg);
+    }
+    return rc;
+}
+
+int callback(void* data, int argc, char** argv, char** azColName) {
+    return 0;
+}
+
+void initializeDatabase() {
+    const char* createUsersTableSQL = 
+        "CREATE TABLE IF NOT EXISTS users ("
+        "username TEXT PRIMARY KEY, "
+        "password TEXT);";
+    executeQuery(createUsersTableSQL, callback, 0);
+
+    const char* createExpensesTableSQL = 
+        "CREATE TABLE IF NOT EXISTS expenses ("
+        "username TEXT, "
+        "amount REAL, "
+        "description TEXT, "
+        "category TEXT, "
+        "month INTEGER, "
+        "day INTEGER, "
+        "year INTEGER, "
+        "id INTEGER PRIMARY KEY, "
+        "madeThisSession INTEGER);";
+    executeQuery(createExpensesTableSQL, callback, 0);
+}
+
+void loadCredentials() {
+    const char* selectCredentialsSQL = "SELECT username, password FROM users;";
+    auto callback = [](void* data, int argc, char** argv, char** azColName) -> int {
+        std::unordered_map<string, string>* credentials = static_cast<std::unordered_map<string, string>*>(data);
+        if (argc == 2) {
+            // Ensure userData entry is created
+            UserDatum datum;
+            datum.username = argv[0];
+            (*credentials)[argv[0]] = argv[1]; // This is redundant but keeps it clear
+            userData[argv[0]] = datum;
+        }
+        return 0;
+    };
+
+    executeQuery(selectCredentialsSQL, callback, &credentials);
+}
+
+void loadExpenses() {
+    const char* selectExpensesSQL = "SELECT username, amount, description, category, month, day, year, id, madeThisSession FROM expenses;";
+    auto callback = [](void* data, int argc, char** argv, char** azColName) -> int {
+        std::unordered_map<string, UserDatum>* userData = static_cast<std::unordered_map<string, UserDatum>*>(data);
+        if (argc == 9) {
+            Expense expense(std::stod(argv[1]), argv[2], argv[3], std::stoi(argv[4]), std::stoi(argv[5]), std::stoi(argv[6]), std::stoi(argv[7]), std::stoi(argv[8]));
+            (*userData)[argv[0]].expenses.push_back(expense);
+        }
+        return 0;
+    };
+
+    executeQuery(selectExpensesSQL, callback, &userData);
 }
 
 bool createAccount(string username, string password) {
-    if (credentials[username] != "") { //username is in system
+    if (credentials.find(username) != credentials.end()) { // username is in system
         std::cerr << "Bad create" << std::endl;
-
         return false;
     }
-    if (username == "" || password == "") { // TODO: extend, for now, just empty username/password
+    if (username.empty() || password.empty()) { // TODO: extend, for now, just empty username/password
         std::cerr << "Bad create" << std::endl;        
         return false;
     }
-    credentials[username] = hashPassword(password);
+
+    string hashedPassword = hashPassword(password);
+
+    std::string insertSQL = "INSERT INTO users (username, password) VALUES ('" + username + "', '" + hashedPassword + "');";
+    if (executeQuery(insertSQL.c_str(), nullptr, nullptr) != SQLITE_OK) {
+        return false;
+    }
+
     UserDatum datum;
     datum.username = username;
     userData[username] = datum;
-    saveCredential(username, hashPassword(password));
+    credentials[username] = hashedPassword;
+
     return true;
 }
 
 bool login(string username, string password) {
-    if (currentUser.username != noUser.username) return false; // someone is already logged in, bad
-    if (credentials[username] == "") { //username is not in system
+    if (currentUser.username != noUser.username) { // someone is already logged in, bad
+        std::cerr << "Bad login 0" << std::endl;
+        return false; 
+    }
+    if (credentials.find(username) == credentials.end()) { // username is not in system
         std::cerr << "Bad login 1" << std::endl;
         return false;
     }
-    if(credentials[username] != hashPassword(password)) { // password incorrect
+    if (credentials[username] != hashPassword(password)) { // password incorrect
         std::cerr << "Bad login 2" << std::endl;
         return false;
     }
@@ -53,9 +144,10 @@ bool login(string username, string password) {
 }
 
 void save(UserDatum client) {
-    userData[client.username] = client;
-    for (auto expense : client.expenses) {
-        if(expense.madeThisSession) saveExpense(client.username, expense);
+    for (auto& expense : client.expenses) {
+        if (expense.madeThisSession) {
+            saveExpense(client.username, expense);
+        }
     }
 }
 
@@ -74,104 +166,38 @@ string hashPassword(string password) {
     return ss.str();
 }
 
-void saveCredential(string username, string hashedPassword) {
-    std::ofstream Creds("files/credentials.txt", std::ios_base::app);
-    Creds << username << "," << hashedPassword << "," << "\n";
-    Creds.close();
-}
+void saveExpense(string username, Expense expense) {
+    std::string insertSQL = "INSERT INTO expenses (username, amount, description, category, month, day, year, id, madeThisSession) VALUES ("
+        "'" + username + "', "
+        + std::to_string(expense.amountSpent) + ", "
+        "'" + expense.description + "', "
+        "'" + expense.category + "', "
+        + std::to_string(expense.month) + ", "
+        + std::to_string(expense.day) + ", "
+        + std::to_string(expense.year) + ", "
+        + std::to_string(expense.id) + ", "
+        + std::to_string(expense.madeThisSession) + ");";
+    executeQuery(insertSQL.c_str(), nullptr, nullptr);
 
-void loadCredentials() {
-    std::ifstream Creds("files/credentials.txt", std::ios_base::app);
-    string line;
-    while (getline(Creds, line)) {
-        if (line.empty()) continue;
-        std::istringstream iss(line);
-        string lineStream;
-        vector<string> data;
-        while(getline(iss, lineStream, ',')) {
-            data.push_back(lineStream);
-        }
-        credentials[data[0]] = data[1];
-
-        UserDatum datum; // setup the user data for each user
-        datum.username = data[0];
-        userData[data[0]] = datum;
-    }
-    Creds.close();
 }
 
 void createExpense(double amount, string description, string category, int month, int day, int year) {
-    if (currentUser.username == noUser.username) return;
-    Expense expense = Expense(amount, description, category, month, day, year, latestID - 1, true);
-    latestID = latestID - 1;
+    if (currentUser.username == noUser.username) return; // no user is logged in
+
+    Expense expense(amount, description, category, month, day, year, latestID--, true);
     currentUser.expenses.push_back(expense);
 }
 
-void saveExpense(string username, Expense expense) {
-    std::ofstream Data("files/userdata.txt", std::ios_base::app);
-    Data << username << "," << expense.amountSpent << "," << expense.description << "," << expense.category << "," << expense.month << "," << expense.day << "," << expense.year << "," << expense.id << "," << "\n";
-    Data.close();
-}
-
-void loadExpenses() {
-    std::ifstream Data("files/userdata.txt");
-    string line;
-    while (getline(Data, line)) {
-        if (line.empty()) continue;
-        std::istringstream iss(line);
-        string lineStream;
-        vector<string> data;
-        while (getline(iss, lineStream, ',')) {
-            data.push_back(lineStream);
-        }
-        Expense expense = Expense(std::stoi(data[1]), data[2], data[3], std::stoi(data[4]), std::stoi(data[5]), std::stoi(data[6]), std::stoi(data[7]), false);
-        latestID = std::stoi(data[7]);
-        userData[data[0]].expenses.push_back(expense);
-    }
-    Data.close();
-}
-
 void deleteExpense(int expenseID) {
-    bool foundExpense = false;
-    string username;
+    std::string deleteSQL = "DELETE FROM expenses WHERE id = " + std::to_string(expenseID) + ";";
+    executeQuery(deleteSQL.c_str(), nullptr, nullptr);
 
-    // Find and delete the expense in userData
     for (auto& userDatum : userData) {
         auto& userExpenses = userDatum.second.expenses;
-        auto it = std::remove_if(userExpenses.begin(), userExpenses.end(), 
-            [expenseID](const Expense& expense) { return expense.id == expenseID; });
-
-        if (it != userExpenses.end()) {
-            userExpenses.erase(it, userExpenses.end());
-            username = userDatum.first;
-            foundExpense = true;
-            break;
-        }
+        userExpenses.erase(std::remove_if(userExpenses.begin(), userExpenses.end(),
+            [expenseID](const Expense& expense) { return expense.id == expenseID; }),
+            userExpenses.end());
     }
-
-    if (!foundExpense) {
-        std::cerr << "Expense ID " << expenseID << " not found.\n";
-        return;
-    }
-
-    // Then delete from the file
-    std::ifstream Data("files/userdata.txt");
-    std::ofstream Temp("files/temp.txt");
-    string line;
-
-    while (getline(Data, line)) {
-        // Check if the line contains the expense ID
-        if (line.find("," + std::to_string(expenseID) + ",") == std::string::npos) {
-            Temp << line << "\n";
-        }
-    }
-
-    Temp.close();
-    Data.close();
-
-    // Replace the original file with the temp file
-    std::remove("files/userdata.txt");
-    std::rename("files/temp.txt", "files/userdata.txt");
 }
 
 void setBudget(string category, double budget) {
@@ -180,16 +206,58 @@ void setBudget(string category, double budget) {
 
 double totalSpending(string category) {
     double sum = 0;
-    for(auto expense : currentUser.expenses) {
-        if(expense.category == category) sum += expense.amountSpent;
+    for (auto& expense : currentUser.expenses) {
+        if (expense.category == category) sum += expense.amountSpent;
     }
     return sum;
 }
 
-vector<Expense> getCategory(string category) {
+vector<Expense> filterCategory(string category) {
     vector<Expense> fin;
-    for (auto expense : currentUser.expenses) {
-        if(expense.category == category) fin.push_back(expense);
+    for (auto& expense : currentUser.expenses) {
+        if (expense.category == category) fin.push_back(expense);
     }
     return fin;
+}
+
+vector<Expense> sortByDate(vector<Expense> selection) {
+    std::sort(selection.begin(), selection.end(), [](const Expense& a, const Expense& b) {
+        if (a.year != b.year) return a.year < b.year;
+        if (a.month != b.month) return a.month < b.month;
+        return a.day < b.day;
+    });
+    return selection;
+}
+
+bool deleteAccount(string username) {
+    // Check if the user exists
+    if (credentials.find(username) == credentials.end()) {
+        std::cerr << "User does not exist." << std::endl;
+        return false;
+    }
+
+    // Remove the user's expenses
+    std::string deleteExpensesSQL = "DELETE FROM expenses WHERE username = '" + username + "';";
+    if (executeQuery(deleteExpensesSQL.c_str(), nullptr, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to delete user expenses." << std::endl;
+        return false;
+    }
+
+    // Remove the user credentials
+    std::string deleteUserSQL = "DELETE FROM users WHERE username = '" + username + "';";
+    if (executeQuery(deleteUserSQL.c_str(), nullptr, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to delete user credentials." << std::endl;
+        return false;
+    }
+
+    // Update in-memory data structures
+    credentials.erase(username);
+    userData.erase(username);
+
+    // If the current user is the one being deleted, log out
+    if (currentUser.username == username) {
+        logout();
+    }
+
+    return true;
 }

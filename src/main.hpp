@@ -2,15 +2,12 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <fstream>
+#include <sqlite3.h>
 #include <openssl/sha.h>
 #include <sstream>
-/*
-#include <QApplication>
-#include <QWidget>
-#include <QPushButton>
-Add these when developing GUI
-*/ 
+#include <algorithm>
+#include <cassert>
+
 using std::vector;
 using std::string;
 
@@ -39,6 +36,7 @@ struct Expense {
     }
 };
 
+
 struct UserDatum {
     string username;
     vector<Expense> expenses;
@@ -50,12 +48,18 @@ bool createAccount(string, string);
 void logout();
 void save(UserDatum);
 string hashPassword(string);
-void saveCredential(string, string);
-void loadCredentials();
-void createExpense(double, string, string, int, int, int);
 void saveExpense(string, Expense);
+void loadCredentials();
 void loadExpenses();
+void createExpense(double, string, string, int, int, int);
 void deleteExpense(int);
 void setBudget(string, double);
 double totalSpending(string);
-vector<Expense> getCategory(string);
+vector<Expense> filterCategory(string);
+vector<Expense> sortByDate(vector<Expense>);
+bool deleteAccount(string);
+
+// SQLite Database Functions
+void initializeDatabase();
+int executeQuery(const char* sql, int (*callback)(void*, int, char**, char**), void* data);
+int callback(void* data, int argc, char** argv, char** azColName);
