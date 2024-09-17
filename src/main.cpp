@@ -28,7 +28,7 @@ int main() {
     loadCredentials();
     loadExpenses();
     login("Gus", "1");
-
+    createExpense(10, "balls", "balls", 5, 20, 1200);
     logout();
 
     sqlite3_close(db);
@@ -78,7 +78,7 @@ void loadCredentials() {
             // Ensure userData entry is created
             UserDatum datum;
             datum.username = argv[0];
-            (*credentials)[argv[0]] = argv[1]; // This is redundant but keeps it clear
+            (*credentials)[argv[0]] = argv[1]; 
             userData[argv[0]] = datum;
         }
         return 0;
