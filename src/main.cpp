@@ -27,8 +27,9 @@ int main() {
     initializeDatabase();
     loadCredentials();
     loadExpenses();
+
     login("Gus", "1");
-    createExpense(10, "balls", "balls", 5, 20, 1200);
+    
     logout();
 
     sqlite3_close(db);
@@ -95,7 +96,7 @@ void loadExpenses() {
             Expense expense(std::stod(argv[1]), argv[2], argv[3], 
                             std::stoi(argv[4]), std::stoi(argv[5]),
                             std::stoi(argv[6]), std::stoi(argv[7]),
-                             std::stoi(argv[8]));
+                            std::stoi(argv[8]));
             (*userData)[argv[0]].expenses.push_back(expense);
         }
         return 0;
@@ -174,7 +175,7 @@ string hashPassword(string password) {
 }
 
 void saveExpense(string username, Expense expense) {
-    std::string insertSQL = "INSERT INTO expenses (username, amount, description, category, month, day, year, id, madeThisSession) VALUES ("
+    std::string insertSQL = "INSERT or IGNORE INTO expenses (username, amount, description, category, month, day, year, id, madeThisSession) VALUES ("
         "'" + username + "', "
         + std::to_string(expense.amountSpent) + ", "
         "'" + expense.description + "', "
